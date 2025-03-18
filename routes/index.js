@@ -108,6 +108,32 @@ router.post('/taxi/call', function(req,res) {
   let endLat = req.body.endLat
   let endLng = req.body.endLng
 
+  if(!(userId && startAddr && startLat && startLng
+    && endAddr && endLat && endLng)) {
+      // 하나라도 빠졌다면
+      res.json([{code: 1, message : "출발지 또는 도착지 정보가 없습니다."}])
+
+      return
+  }
+
+  let queryStr = `INSERT INTO tb_call VALUES(NULL, "${userId}" ,
+  "${startLat}","${startLng}" , "${startAddr}",
+  "${endLat}", "${endLng}" , "${endAddr}", "REQ" ,"")`
+
+  console.log("call / queryStr = " + queryStr)
+
+  db.query(queryStr, function(err, rows, fields) {
+    if(!err){
+      console.log("call / rows = " + JSON.stringify(rows))
+      res.json([{ code:0, message : "택시 호출이 완료 되었습니다."}])
+    }
+    else {
+      console.log("call / err : " + JSON.stringify(err))
+      res.json([{ code: 2, message: "택시 호출이 실패했습니다.", data:err}])
+    }
+  })
+
 })
+
 
 module.exports = router;
