@@ -193,5 +193,28 @@ router.post('/driver/login', function(req,res) {
   })
 })
 
+router.post('/driver/list', function(req,res) {
+  console.log("driver-list / req.body " + JSON.stringify(req.body) )
+
+  let userId = req.body.userId
+
+  console.log("driver-list / userId = " + userId)
+
+  let queryStr = `SELECT * FROM tb_call WHERE driver_id="${userId}" 
+    OR call_state="REQ" ORDER BY id DESC`
+
+  console.log("driver-list / queryStr =" + queryStr)
+  db.query(queryStr, function(err, rows,fields){
+    if(!err){
+      console.log("driver-list / rows = " +JSON.stringify(rows))
+      let code = 0
+      res.json([{ code: code, message: "택시 호출 목록 호출 성공", data: rows}])
+    }
+    else {
+      console.log("driver-list / err : " + err)
+      res.json([{ code: 1, message: "알 수 없는 오류가 발생하였습니다.", data : err}])
+    }
+  })
+})
 
 module.exports = router;
