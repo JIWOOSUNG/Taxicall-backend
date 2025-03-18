@@ -168,5 +168,30 @@ router.post('/driver/register', function(req,res) {
     })
   })
 
+router.post('/driver/login', function(req,res) {
+  console.log("driver-login / req.body" + JSON.stringify(req.body))
+
+  let userId = req.body.userId
+  let userPw = req.body.userPw
+
+  let queryStr = `SELECT * FROM tb_driver WHERE driver_id="${userId}" AND driver_pw="${userPw}"`
+  console.log("driver-login / queryStr " + queryStr)
+  db.query(queryStr, (err, rows, fields) => {
+    if(!err) {
+      console.log("driver-login / rows = " +JSON.stringify(rows) )
+      let len = Object.keys(rows).length
+      console.log("driver-login / len = " + len)
+      let code = len==0 ? 1 : 0
+      let message = len ==0? "아이디 또는 비밀번호가 잘못 입력되었습니다." : "로그인 성공"
+
+      res.json([{code:code, message:message}])
+    }
+    else{
+      console.log("driver-login / err : " + err)
+      res.json([{code: 1, message: err}])
+    }
+  })
+})
+
 
 module.exports = router;
