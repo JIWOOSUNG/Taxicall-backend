@@ -135,5 +135,38 @@ router.post('/taxi/call', function(req,res) {
 
 })
 
+router.post('/driver/register', function(req,res) {
+  console.log('driver-register / req.body' + JSON.stringify(req.body) )
+
+  let userId = req.body.userId
+  let userPw = req.body.userPw
+
+  console.log('driver-register / userId = ' + userId + ', userPw =' + userPw)
+
+  if(!(userId && userPw)){
+    res.json([{code:1, message:"아이디 또는 비밀번호가 없습니다."}])
+    return
+  }
+
+  let queryStr =`INSERT INTO tb_driver VALUES ("${userId}","${userPw}", "")`
+  console.log("driver-register / queryStr = " + queryStr)
+
+  db.query(queryStr, function(err, rows, fields) {
+    if(!err) {
+      console.log("driver-register / rows = " +JSON.stringify(rows))
+      res.json([{code:0, message:"회원가입이 완료되었습니다."}])
+    }
+    else{
+      console.log("dirver-register / err : " + JSON.stringify(err))
+      if(err.code == "ER_DUP_ENTRY") {
+        res.json([{code:2, message:"이미 등록된 ID입니다."}])
+      }
+      else{
+        res.json([{code:3, message:"알 수 없는 오류가 발생하였습니다.", data:err}])
+      }
+      }
+    })
+  })
+
 
 module.exports = router;
