@@ -2,11 +2,60 @@ var express = require('express');
 var router = express.Router();
 
 const db = require('../database/db_connect')
-
+const {use} =require('.');
+const admin = require('firebase-admin')
 /* GET home page. */
 router.get('/', function(req, res, next) {
   res.render('index', { title: 'Express' });
 });
+
+const updateFcm = (fcmToken, table, idColName, id) => {
+  const queryStr = `UPDATE ${table} SET fcm_token="${fcmToken}" WHERE ${idColName}= "${id}"`
+  console.log(">> updateFcm / queryStr = " + queryStr)
+
+  db.query(queryStr, function(err, rows, fields){
+    if(err) {
+      console.log('updateFcm / err : ' + JSON.stringify(err))
+    }
+  })
+}
+
+const sendPushToAlldriver = () => {
+  //모든 기사에게 알림
+  let queryStr = 'SELECT fcm_token from tb_driver'
+  console.log('>> queryStr = ' +queryStr)
+
+  db.query(queryStr,function(err, rows, fields){
+    if(!err) {
+      for( row of rows) {
+        console.log('allDriver - fcm_token = ' +row.fcm_token)
+        if(row.fcm_token){
+          sendFcm(row.fcm_token, "배차 요청이 있습니다.")
+        }
+      }
+    }
+  })
+}
+
+const sendPushToUser = (userId) => {
+  let queryStr = `SELECT fcm_token FROM tb_user WHERE user_id="${userId}"`
+  console.log(">> push user - queryStr = " + queryStr)
+
+  db.query(queryStr, function(err, rows, fields){
+    if(!err) {
+      console.log(">> push user - rows = " + JSON.stringify(rows))
+      if(Object.keys(rows).length>0 && rows[0].fcmToken) {
+        sendFcm(rows[0].fcm_token, "배차가 완료되었습니다.")
+      }
+      else {
+        console.log("push 전송 실패")
+      }
+    }
+    else {
+      console.log(">> push user - err : " + err)
+    }
+  })
+}
 
 router.get('/taxi/test', function(req,res,next) {
   db.query('select * from tb_user', (err,rows,fields) => {
@@ -26,6 +75,7 @@ router.post('/taxi/login', function(req,res,next) {
 
   let userId = req.body.userId
   let userPw = req.body.userPw
+  let fcmToken = req.body.fcmToken || ""
 
   let queryStr = `SELECT * FROM tb_user WHERE user_id="${userId}" AND user_pw="${userPw}"`
   console.log("login / queryStr = "+ queryStr)
@@ -36,6 +86,10 @@ router.post('/taxi/login', function(req,res,next) {
       console.log("login / len =" + len)
       let code = len==0 ? 1 : 0
       let message = len ==0 ? "아이디 또는 비밀번호가 잘못 입력되었습니다." : "로그인 성공"
+
+      if(code==0) {
+        updateFcm(fcmToken, 'tb_uer', 'user_id', userId)
+      }
 
       res.json([{code: code, message: message}])
     }
@@ -51,6 +105,7 @@ router.post('/taxi/register', function(req,res) {
 
   let userId = req.body.userId
   let userPw = req.body.userPw
+  let fcmToken = req.body.fcmToken || ""
 
   console.log("register / userId = " + userId + " , userPw = " + userPw)
   if (!(userId && userPw)) {
@@ -58,7 +113,7 @@ router.post('/taxi/register', function(req,res) {
     return 
   }
 
-  let queryStr = `insert into tb_user values ("${userId}", "${userPw}", "")`
+  let queryStr = `insert into tb_user values ("${userId}", "${userPw}", "${fcmToken}")`
   console.log("register / queryStr = " + queryStr)
   db.query(queryStr, function(err,rows,fields) {
     if(!err) {
@@ -118,13 +173,16 @@ router.post('/taxi/call', function(req,res) {
 
   let queryStr = `INSERT INTO tb_call VALUES(NULL, "${userId}" ,
   "${startLat}","${startLng}" , "${startAddr}",
-  "${endLat}", "${endLng}" , "${endAddr}", "REQ" ,"")`
+  "${endLat}", "${endLng}" , "${endAddr}", "REQ" ,"CURRENT_TIMESTAMP")`
 
   console.log("call / queryStr = " + queryStr)
 
   db.query(queryStr, function(err, rows, fields) {
     if(!err){
       console.log("call / rows = " + JSON.stringify(rows))
+
+      sendPushToAlldriver()
+
       res.json([{ code:0, message : "택시 호출이 완료 되었습니다."}])
     }
     else {
@@ -140,6 +198,7 @@ router.post('/driver/register', function(req,res) {
 
   let userId = req.body.userId
   let userPw = req.body.userPw
+  let fcmToken = req.body.fcmToken
 
   console.log('driver-register / userId = ' + userId + ', userPw =' + userPw)
 
@@ -148,7 +207,7 @@ router.post('/driver/register', function(req,res) {
     return
   }
 
-  let queryStr =`INSERT INTO tb_driver VALUES ("${userId}","${userPw}", "")`
+  let queryStr =`INSERT INTO tb_driver VALUES ("${userId}","${userPw}", "${fcmToken}")`
   console.log("driver-register / queryStr = " + queryStr)
 
   db.query(queryStr, function(err, rows, fields) {
@@ -173,6 +232,8 @@ router.post('/driver/login', function(req,res) {
 
   let userId = req.body.userId
   let userPw = req.body.userPw
+  let fcmToken = req.body.fcmToken || ""
+
 
   let queryStr = `SELECT * FROM tb_driver WHERE driver_id="${userId}" AND driver_pw="${userPw}"`
   console.log("driver-login / queryStr " + queryStr)
@@ -183,6 +244,10 @@ router.post('/driver/login', function(req,res) {
       console.log("driver-login / len = " + len)
       let code = len==0 ? 1 : 0
       let message = len ==0? "아이디 또는 비밀번호가 잘못 입력되었습니다." : "로그인 성공"
+
+      if(code == 0) {
+        updateFcm(fcmToken, 'tb_driver', 'driver_id', userId)
+      }
 
       res.json([{code:code, message:message}])
     }
@@ -222,6 +287,7 @@ router.post("/driver/accept", function(req,res) {
 
   let callId = req.body.callId
   let driverId = req.body.driverId
+  let userId = req.body.userId
   
   console.log("driver-accept / callId = " + callId + ", driverId = " + driverId)
 
@@ -236,6 +302,7 @@ router.post("/driver/accept", function(req,res) {
     if(!err) {
       console.log("driver-accept / rows = " + JSON.stringify(rows))
       if(rows.affectedRows > 0){
+        sendPushToUser(userId)
         res.json([{code:0, message:"배차가 완료되었습니다."}])
       }
       else {
@@ -248,5 +315,31 @@ router.post("/driver/accept", function(req,res) {
     }
   })
 })
+
+router.post('/push/test' , function(req,res,next) {
+  console.log("push-text / req.body" + JSON.stringify(req.body))
+
+  let fcmToken = req.body.fcmToken
+  let message = req.body.message
+
+  sendFcm(fcmToken, message)
+
+  res.json([{ code: 0, message:"푸시테스트"}])
+})
+
+
+
+
+const sendFcm = (fcmToken, msg) => {
+  const message = {notification : {title: '알림', body:msg}, token: fcmToken}
+
+  admin.messaging().send(message)
+  .then( (response ) => {
+    console.log("-- push 성공")
+  })
+  .catch( (error) => {
+    console.log("-- push error / " + JSON.stringify(error))
+  })
+}
 
 module.exports = router;
